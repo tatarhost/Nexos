@@ -3,26 +3,28 @@ on:
   push:
     paths:
       - data/train.jsonl
+      - ai/**
+      - .github/workflows/train-ai.yml
   workflow_dispatch:
     inputs:
-      model_id:
-        description: Hugging Face causal language model ID
+      model_size:
+        description: Model size (trained from random initialization)
         required: true
-        default: distilgpt2
-        type: string
+        default: 10m
+        type: choice
+        options: [10m, 100m]
       dataset_path:
         description: JSONL dataset path in this repository
         required: true
         default: data/train.jsonl
         type: string
-      epochs:
-        description: Training epochs
+      max_steps:
+        description: Training steps (10-2000; start small on CPU)
         required: true
-        default: "1"
-        type: choice
-        options: ["1", "2", "3"]
+        default: "100"
+        type: string
       test_prompt:
-        description: Prompt used to test the trained adapter
+        description: Prompt used to test the trained model
         required: true
         default: "Привет! Расскажи о себе."
         type: string
@@ -41,15 +43,15 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: ai/requirements.txt
-      - name: Install training dependencies
+      - name: Install CPU training dependencies
         run: |
           python -m pip install --upgrade pip
           pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
-          pip install -r ai/requirements.txt
       - name: Validate inputs
         env:
           DATASET_PATH: ${{ inputs.dataset_path || 'data/train.jsonl' }}
-          MODEL_ID: ${{ inputs.model_id || 'distilgpt2' }}
+          MODEL_SIZE: ${{ inputs.model_size || '10m' }}
+          MAX_STEPS: ${{ inputs.max_steps || '100' }}
         run: |
           python - <<'PY'
           import os
@@ -57,24 +59,26 @@ jobs:
           p = Path(os.environ["DATASET_PATH"])
           if p.is_absolute() or ".." in p.parts or not p.is_file() or p.suffix.lower() != ".jsonl":
               raise SystemExit("Dataset must be an existing repository-relative .jsonl file without '..'.")
-          if not os.environ["MODEL_ID"].strip():
-              raise SystemExit("Model ID is required.")
+          if os.environ["MODEL_SIZE"] not in ("10m", "100m"):
+              raise SystemExit("MODEL_SIZE must be 10m or 100m.")
+          steps = int(os.environ["MAX_STEPS"])
+          if not 10 <= steps <= 2000:
+              raise SystemExit("MAX_STEPS must be between 10 and 2000.")
           PY
-      - name: Train LoRA adapter
+      - name: Train NEXUS model from scratch
         env:
-          MODEL_ID: ${{ inputs.model_id || 'distilgpt2' }}
+          MODEL_SIZE: ${{ inputs.model_size || '10m' }}
           DATASET_PATH: ${{ inputs.dataset_path || 'data/train.jsonl' }}
-          EPOCHS: ${{ inputs.epochs || '1' }}
+          MAX_STEPS: ${{ inputs.max_steps || '100' }}
         run: python ai/train.py
       - name: Test trained model
         env:
-          MODEL_ID: ${{ inputs.model_id || 'distilgpt2' }}
           TEST_PROMPT: ${{ inputs.test_prompt || 'Привет! Расскажи о себе.' }}
         run: python ai/test_model.py
-      - name: Package downloadable model
+      - name: Package standalone model
         run: |
-          cd dist && zip -r ../nexus-ai-model.zip .
-      - name: Upload trained model and test report
+          cd dist && zip -r ../nexus-ai-model.zip model test-report.txt
+      - name: Upload model and test report
         uses: actions/upload-artifact@v4
         with:
           name: nexus-ai-model
