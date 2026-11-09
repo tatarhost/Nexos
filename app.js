@@ -5,6 +5,7 @@ function show(name){views.forEach(v=>v.classList.toggle('active',v.id==='view-'+
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
 document.querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.open)));
 let target='android';
+const names={android:'Android APK',java:'Java JAR',windows:'Windows EXE',minecraft:'Minecraft Mod'};
 document.querySelectorAll('[data-target]').forEach(b=>b.addEventListener('click',()=>{target=b.dataset.target;document.querySelectorAll('[data-target]').forEach(x=>x.classList.toggle('selected',x===b));}));
-document.getElementById('run-build').addEventListener('click',()=>{const path=document.getElementById('project-path').value.trim();if(!path||path.startsWith('/')||path.includes('..')||path.includes('\\')){alert('Укажи корректный относительный путь внутри репозитория.');return;}window.open(repo+'/actions/workflows/build.yml','_blank','noopener');});
+document.getElementById('run-build').addEventListener('click',()=>{const path=document.getElementById('project-path').value.trim();if(!path||path.startsWith('/')||path.includes('..')||path.includes('\\')){alert('Укажи корректный относительный путь внутри репозитория.');return;}window.open(repo+'/actions/workflows/build.yml','_blank','noopener');alert('На странице GitHub нажми Run workflow и укажи:\nЦель: '+names[target]+'\nПапка проекта: '+path);});
 })();
