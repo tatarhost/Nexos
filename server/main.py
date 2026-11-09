@@ -168,7 +168,7 @@ def chat(request: ChatRequest):
         raise HTTPException(status_code=404, detail="Model not found. Upload its ZIP first.")
     model = item["model"]
     tokens = encode(request.prompt)
-    torch.manual_seed()
+    torch.seed()
     generated = list(tokens)
     with torch.inference_mode():
         for _ in range(request.max_new_tokens):
