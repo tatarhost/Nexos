@@ -28,3 +28,8 @@ A tiny sample dataset is only enough to validate the pipeline; it cannot produce
 
 ## Security
 Do not commit passwords, access tokens, signing keys, or private credentials. Keep secrets in GitHub Actions Secrets.
+
+
+## Persistent model inference server
+
+The AI Lab now includes a ZIP upload panel and chat client for a separately deployed inference API. Deploy the FastAPI service from `server/` to a Linux VPS with Docker, configure `.env`, HTTPS and CORS, then enter the server URL and API token in AI Lab. Uploaded models are stored in a persistent Docker volume and loaded for chat inference. See [server deployment instructions](server/README.md).
