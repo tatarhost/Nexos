@@ -1,0 +1,105 @@
+name: NEXUS Cloud Build
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Build target
+        required: true
+        type: choice
+        options: [android, java, windows, minecraft]
+      project_path:
+        description: Project folder in repository
+        required: true
+        default: .
+        type: string
+permissions:
+  contents: read
+jobs:
+  android:
+    if: inputs.target == 'android'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build APK
+        working-directory: ${{ inputs.project_path }}
+        run: |
+          test -f ./gradlew || { echo "Gradle wrapper not found"; exit 1; }
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-android-apk
+          path: ${{ inputs.project_path }}/**/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
+  java:
+    if: inputs.target == 'java'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build JAR
+        working-directory: ${{ inputs.project_path }}
+        run: |
+          test -f ./gradlew || { echo "Gradle wrapper not found"; exit 1; }
+          chmod +x ./gradlew
+          ./gradlew build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-java-jar
+          path: ${{ inputs.project_path }}/**/build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 14
+  minecraft:
+    if: inputs.target == 'minecraft'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build Minecraft mod
+        working-directory: ${{ inputs.project_path }}
+        run: |
+          test -f ./gradlew || { echo "Gradle wrapper not found"; exit 1; }
+          chmod +x ./gradlew
+          ./gradlew build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-minecraft-mod
+          path: ${{ inputs.project_path }}/**/build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 14
+  windows:
+    if: inputs.target == 'windows'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish Windows application
+        working-directory: ${{ inputs.project_path }}
+        shell: pwsh
+        run: |
+          $project = Get-ChildItem -Filter *.csproj -Recurse | Select-Object -First 1
+          if (-not $project) { throw "No .csproj project found" }
+          dotnet publish $project.FullName -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./nexus-publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-windows-x64
+          path: ${{ inputs.project_path }}/nexus-publish/**
+          if-no-files-found: error
+          retention-days: 14
