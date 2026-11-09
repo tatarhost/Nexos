@@ -1,7 +1,7 @@
 services:
   nexus-inference:
     build:
-      context: .
+      context: ..
       dockerfile: server/Dockerfile
     restart: unless-stopped
     ports:
