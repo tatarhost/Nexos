@@ -1,5 +1,8 @@
 name: NEXUS AI Train
 on:
+  push:
+    paths:
+      - data/train.jsonl
   workflow_dispatch:
     inputs:
       model_id:
@@ -44,8 +47,8 @@ jobs:
           pip install -r ai/requirements.txt
       - name: Validate inputs
         env:
-          DATASET_PATH: ${{ inputs.dataset_path }}
-          MODEL_ID: ${{ inputs.model_id }}
+          DATASET_PATH: ${{ inputs.dataset_path || 'data/train.jsonl' }}
+          MODEL_ID: ${{ inputs.model_id || 'distilgpt2' }}
         run: |
           python - <<'PY'
           import os
@@ -58,14 +61,14 @@ jobs:
           PY
       - name: Train LoRA adapter
         env:
-          MODEL_ID: ${{ inputs.model_id }}
-          DATASET_PATH: ${{ inputs.dataset_path }}
-          EPOCHS: ${{ inputs.epochs }}
+          MODEL_ID: ${{ inputs.model_id || 'distilgpt2' }}
+          DATASET_PATH: ${{ inputs.dataset_path || 'data/train.jsonl' }}
+          EPOCHS: ${{ inputs.epochs || '1' }}
         run: python ai/train.py
       - name: Test trained model
         env:
-          MODEL_ID: ${{ inputs.model_id }}
-          TEST_PROMPT: ${{ inputs.test_prompt }}
+          MODEL_ID: ${{ inputs.model_id || 'distilgpt2' }}
+          TEST_PROMPT: ${{ inputs.test_prompt || 'Привет! Расскажи о себе.' }}
         run: python ai/test_model.py
       - name: Package downloadable model
         run: |
