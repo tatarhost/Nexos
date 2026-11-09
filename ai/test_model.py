@@ -2,27 +2,36 @@ import os
 from pathlib import Path
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
-base_id = os.environ.get("MODEL_ID", "distilgpt2")
-prompt = os.environ.get("TEST_PROMPT", "Hello!")
-model_dir = Path("dist/model")
-tokenizer = AutoTokenizer.from_pretrained(model_dir)
-model = AutoModelForCausalLM.from_pretrained(model_dir)
+from model import NexusGPT, decode, encode
+
+folder = Path("dist/model")
+payload = torch.load(folder / "model.pt", map_location="cpu", weights_only=True)
+model = NexusGPT(payload["config"])
+model.load_state_dict(payload["state_dict"])
 model.eval()
-inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=128)
+
+prompt = os.environ.get("TEST_PROMPT", "Привет! Расскажи о себе.")
+tokens = encode(prompt)
+generated = tokens[:]
+torch.manual_seed(7)
 with torch.no_grad():
-    output = model.generate(
-        **inputs,
-        max_new_tokens=80,
-        do_sample=True,
-        temperature=0.8,
-        top_p=0.9,
-        pad_token_id=tokenizer.eos_token_id,
-    )
-result = tokenizer.decode(output[0], skip_special_tokens=True)
-Path("dist/test-report.txt").write_text(
-    "Base model: " + base_id + "\nPrompt: " + prompt + "\n\nGenerated output:\n" + result + "\n",
-    encoding="utf-8",
+    for _ in range(120):
+        context = torch.tensor([generated[-model.block_size:]], dtype=torch.long)
+        logits = model(context)[0, -1]
+        logits = logits / 0.9
+        probabilities = torch.softmax(logits, dim=-1)
+        next_token = int(torch.multinomial(probabilities, 1).item())
+        if next_token == 2:
+            break
+        generated.append(next_token)
+
+result = decode(generated[1:])
+config = payload["config"]
+report = (
+    f"Model: {config['name']}\n"
+    f"Parameters: {sum(p.numel() for p in model.parameters()):,}\n"
+    f"Prompt: {prompt}\n\nGenerated output:\n{result}\n"
 )
-print(result)
+Path("dist/test-report.txt").write_text(report, encoding="utf-8")
+print(report)
