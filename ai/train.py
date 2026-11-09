@@ -76,6 +76,11 @@ out = Path("dist/adapter")
 out.mkdir(parents=True, exist_ok=True)
 model.save_pretrained(out)
 tokenizer.save_pretrained(out)
+merged = model.merge_and_unload()
+merged_dir = Path("dist/model")
+merged_dir.mkdir(parents=True, exist_ok=True)
+merged.save_pretrained(merged_dir, safe_serialization=True)
+tokenizer.save_pretrained(merged_dir)
 Path("dist/model-info.json").write_text(json.dumps({
     "base_model": model_id,
     "method": "LoRA",
