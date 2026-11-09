@@ -33,3 +33,12 @@ GitHub Actions runners are temporary cloud build machines. They can compile, tes
 
 ## Security
 Do not commit passwords, access tokens, signing keys, or private credentials. Keep future secrets in GitHub Actions Secrets and grant workflows only the permissions they need.
+
+## NEXUS AI Lab
+- Open **AI Lab** in the website.
+- Add training examples as JSON Lines in `data/train.jsonl`, one object per line: `{"text":"example text"}`.
+- Run **Actions → NEXUS AI Train → Run workflow**. Choose a Hugging Face causal language model ID, dataset path and 1–3 epochs.
+- The workflow fine-tunes the base model with LoRA on a GitHub-hosted CPU runner, generates a test sample, and uploads `nexus-ai-model` containing the adapter, tokenizer and test report.
+- Download the ZIP from the completed Actions run. The adapter is used together with its original base model; it is not a standalone full model.
+
+The default `distilgpt2` model is deliberately small for a first CPU experiment. Larger models may exceed hosted-runner memory/time limits. GitHub Actions is a temporary runner, not a dedicated GPU server.
