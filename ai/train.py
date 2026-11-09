@@ -1,91 +1,90 @@
 import json
 import os
+import random
 from pathlib import Path
 
 import torch
-from datasets import Dataset
-from peft import LoraConfig, TaskType, get_peft_model
-from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling, Trainer, TrainingArguments
+from torch.nn import functional as F
 
-model_id = os.environ.get("MODEL_ID", "distilgpt2")
-dataset_path = Path(os.environ.get("DATASET_PATH", "data/train.jsonl"))
-epochs = int(os.environ.get("EPOCHS", "1"))
-if epochs not in (1, 2, 3):
-    raise SystemExit("EPOCHS must be 1, 2 or 3.")
+from model import NexusGPT, encode
+
+DATASET_PATH = Path(os.environ.get("DATASET_PATH", "data/train.jsonl"))
+MODEL_SIZE = os.environ.get("MODEL_SIZE", "10m").lower()
+MAX_STEPS = int(os.environ.get("MAX_STEPS", "100"))
+BLOCK_SIZE = 128
+
+if MODEL_SIZE == "10m":
+    config = {"name": "NEXUS-10M", "width": 384, "layers": 6, "heads": 6, "block_size": BLOCK_SIZE}
+elif MODEL_SIZE == "100m":
+    config = {"name": "NEXUS-100M", "width": 768, "layers": 14, "heads": 12, "block_size": BLOCK_SIZE}
+else:
+    raise SystemExit("MODEL_SIZE must be 10m or 100m.")
+if not 10 <= MAX_STEPS <= 2000:
+    raise SystemExit("MAX_STEPS must be between 10 and 2000.")
 
 rows = []
-with dataset_path.open("r", encoding="utf-8") as f:
-    for line_number, line in enumerate(f, 1):
+with DATASET_PATH.open("r", encoding="utf-8") as stream:
+    for line_number, line in enumerate(stream, 1):
         if not line.strip():
             continue
         item = json.loads(line)
         value = item.get("text") if isinstance(item, dict) else None
-        if not isinstance(value, str) or not value.strip():
-            raise SystemExit(f"Line {line_number} must contain a non-empty string field named 'text'.")
-        rows.append({"text": value.strip()})
+        if not isinstance(value, str) or len(value.strip()) < 2:
+            raise SystemExit(f"Line {line_number} must contain a non-empty 'text' field.")
+        rows.append(value.strip())
 if len(rows) < 2:
-    raise SystemExit("At least two non-empty training examples are required.")
+    raise SystemExit("At least two training examples are required.")
 
-tokenizer = AutoTokenizer.from_pretrained(model_id)
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
-model = AutoModelForCausalLM.from_pretrained(model_id)
-model.config.pad_token_id = tokenizer.pad_token_id
+# Train a byte-level language model from random initialization. No pretrained weights.
+tokens = []
+for row in rows:
+    tokens.extend(encode(row))
+tokens = torch.tensor(tokens, dtype=torch.long)
+if len(tokens) < 8:
+    raise SystemExit("Training corpus is too small.")
 
-# GPT-2 style attention layers use Conv1D projections; fan_in_fan_out handles that layout.
-lora = LoraConfig(
-    task_type=TaskType.CAUSAL_LM,
-    r=8,
-    lora_alpha=16,
-    lora_dropout=0.05,
-    target_modules=["c_attn", "c_proj"],
-    fan_in_fan_out=True,
-)
-model = get_peft_model(model, lora)
-model.print_trainable_parameters()
+torch.manual_seed(42)
+random.seed(42)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = NexusGPT(config).to(device)
+parameter_count = sum(p.numel() for p in model.parameters())
+print(f"Training {config['name']} from scratch: {parameter_count:,} parameters on {device}")
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.1)
+model.train()
 
-dataset = Dataset.from_list(rows)
-def tokenize(batch):
-    return tokenizer(batch["text"], truncation=True, max_length=128)
-tokenized = dataset.map(tokenize, batched=True, remove_columns=["text"])
-if len(tokenized) < 2:
-    raise SystemExit("Dataset did not produce enough tokenized examples.")
+for step in range(1, MAX_STEPS + 1):
+    starts = torch.randint(0, len(tokens) - 1, (1,)).item()
+    end = min(starts + BLOCK_SIZE + 1, len(tokens))
+    sample = tokens[starts:end]
+    if len(sample) < 3:
+        sample = tokens[:min(len(tokens), BLOCK_SIZE + 1)]
+    if len(sample) < 3:
+        raise SystemExit("Not enough tokens to create a training batch.")
+    x = sample[:-1].unsqueeze(0).to(device)
+    y = sample[1:].unsqueeze(0).to(device)
+    logits = model(x)
+    loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
+    optimizer.zero_grad(set_to_none=True)
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+    optimizer.step()
+    if step == 1 or step % 10 == 0 or step == MAX_STEPS:
+        print(f"step {step}/{MAX_STEPS} - loss: {loss.item():.4f}")
 
-args = TrainingArguments(
-    output_dir="ai/training-output",
-    num_train_epochs=epochs,
-    per_device_train_batch_size=1,
-    gradient_accumulation_steps=1,
-    learning_rate=2e-4,
-    logging_steps=1,
-    save_strategy="no",
-    report_to="none",
-    use_cpu=not torch.cuda.is_available(),
-    dataloader_pin_memory=torch.cuda.is_available(),
-)
-trainer = Trainer(
-    model=model,
-    args=args,
-    train_dataset=tokenized,
-    data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
-    tokenizer=tokenizer,
-)
-trainer.train()
-
-out = Path("dist/adapter")
+out = Path("dist/model")
 out.mkdir(parents=True, exist_ok=True)
-model.save_pretrained(out)
-tokenizer.save_pretrained(out)
-merged = model.merge_and_unload()
-merged_dir = Path("dist/model")
-merged_dir.mkdir(parents=True, exist_ok=True)
-merged.save_pretrained(merged_dir, safe_serialization=True)
-tokenizer.save_pretrained(merged_dir)
-Path("dist/model-info.json").write_text(json.dumps({
-    "base_model": model_id,
-    "method": "LoRA",
-    "epochs": epochs,
+torch.save({"state_dict": model.cpu().state_dict(), "config": config}, out / "model.pt")
+(out / "config.json").write_text(json.dumps({
+    **config,
+    "parameters": parameter_count,
+    "training_steps": MAX_STEPS,
     "training_examples": len(rows),
-    "adapter_directory": "adapter",
+    "initialization": "random",
+    "tokenizer": "UTF-8 byte-level",
 }, ensure_ascii=False, indent=2), encoding="utf-8")
-print(f"Saved LoRA adapter to {out}")
+(out / "tokenizer.json").write_text(json.dumps({
+    "type": "utf8-byte",
+    "vocab_size": 260,
+    "special_tokens": {"pad": 0, "bos": 1, "eos": 2, "unk": 3},
+}, indent=2), encoding="utf-8")
+print(f"Saved standalone NEXUS model to {out} ({parameter_count:,} parameters)")
