@@ -73,9 +73,6 @@ jobs:
         run: python ai/test_model.py
       - name: Package downloadable model
         run: |
-          mkdir -p dist
-          cp ai/test-report.txt dist/
-          cp ai/model-info.json dist/
           cd dist && zip -r ../nexus-ai-model.zip .
       - name: Upload trained model and test report
         uses: actions/upload-artifact@v4
