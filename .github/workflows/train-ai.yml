@@ -1,0 +1,81 @@
+name: NEXUS AI Train
+on:
+  workflow_dispatch:
+    inputs:
+      model_id:
+        description: Hugging Face causal language model ID
+        required: true
+        default: distilgpt2
+        type: string
+      dataset_path:
+        description: JSONL dataset path in this repository
+        required: true
+        default: data/train.jsonl
+        type: string
+      epochs:
+        description: Training epochs
+        required: true
+        default: "1"
+        type: choice
+        options: ["1", "2", "3"]
+      test_prompt:
+        description: Prompt used to test the trained adapter
+        required: true
+        default: "Привет! Расскажи о себе."
+        type: string
+permissions:
+  contents: read
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install training dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ai/requirements.txt
+      - name: Validate inputs
+        env:
+          DATASET_PATH: ${{ inputs.dataset_path }}
+          MODEL_ID: ${{ inputs.model_id }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path(os.environ["DATASET_PATH"])
+          if p.is_absolute() or ".." in p.parts or not p.is_file() or p.suffix.lower() != ".jsonl":
+              raise SystemExit("Dataset must be an existing repository-relative .jsonl file without '..'.")
+          if not os.environ["MODEL_ID"].strip():
+              raise SystemExit("Model ID is required.")
+          PY
+      - name: Train LoRA adapter
+        env:
+          MODEL_ID: ${{ inputs.model_id }}
+          DATASET_PATH: ${{ inputs.dataset_path }}
+          EPOCHS: ${{ inputs.epochs }}
+        run: python ai/train.py
+      - name: Test trained model
+        env:
+          MODEL_ID: ${{ inputs.model_id }}
+          TEST_PROMPT: ${{ inputs.test_prompt }}
+        run: python ai/test_model.py
+      - name: Package downloadable model
+        run: |
+          mkdir -p dist
+          cp ai/test-report.txt dist/
+          cp ai/model-info.json dist/
+          cd dist && zip -r ../nexus-ai-model.zip .
+      - name: Upload trained model and test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-ai-model
+          path: nexus-ai-model.zip
+          if-no-files-found: error
+          retention-days: 14
