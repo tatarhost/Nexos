@@ -33,5 +33,27 @@
 <div class="ai-actions"><a class="secondary" href="https://github.com/tatarhost/Nexos/upload/main/data" target="_blank" rel="noreferrer">Загрузить датасет ↗</a><button class="primary" id="run-ai">Запустить обучение ↗</button></div>
 <p class="hint">Сайт открывает форму запуска GitHub Actions. После завершения открой артефакт nexus-ai-model.zip: внутри будут самостоятельные веса model.pt, конфигурация, токенизатор и test-report.txt. Артефакт хранится 14 дней.</p>
 <a class="actions-link" href="https://github.com/tatarhost/Nexos/actions/workflows/train-ai.yml" target="_blank" rel="noreferrer">Открыть обучение и результаты в GitHub Actions ↗</a>
-</div><div class="view" id="view-terminal"><div class="view-head"><div><div class="eyebrow">BUILD OUTPUT</div><h2>Консоль</h2><p>Здесь доступны ссылки на реальные логи GitHub Actions.</p></div></div><div class="terminal"><div class="terminal-head"><i></i><i></i><i></i><span>nexus@cloud:~</span></div><div class="terminal-body"><p><em>01</em> NEXUS OS environment ready</p><p><em>02</em> Repository: <b>tatarhost/Nexos</b></p><p><em>03</em> Runner: provisioned on workflow start</p><p><em>04</em> Waiting for workflow run…</p><p class="cursor">_</p></div></div><a class="primary" href="https://github.com/tatarhost/Nexos/actions" target="_blank" rel="noreferrer">Открыть реальные логи Actions ↗</a></div>
+
+<div class="inference-panel">
+  <div class="inference-heading"><div><div class="eyebrow">LIVE INFERENCE</div><h3>Загрузка и запуск модели</h3><p>Подключи свой VPS с NEXUS Inference API. ZIP хранится на сервере, а чат работает через него.</p></div><span class="tag" id="inference-status">НЕ ПОДКЛЮЧЕНО</span></div>
+  <label class="field-label" for="inference-url">HTTPS URL СЕРВЕРА</label>
+  <input id="inference-url" type="url" placeholder="https://ai.example.com" autocomplete="url">
+  <label class="field-label ai-label" for="inference-token">API TOKEN</label>
+  <input id="inference-token" type="password" placeholder="Токен из .env на VPS" autocomplete="off">
+  <div class="inference-actions"><button class="secondary" id="inference-connect">Подключить сервер</button><a class="actions-link" href="https://github.com/tatarhost/Nexos/blob/main/server/README.md" target="_blank" rel="noreferrer">Инструкция по серверу ↗</a></div>
+  <div class="upload-row">
+    <div><label class="field-label" for="model-zip">ZIP-ФАЙЛ МОДЕЛИ</label><input id="model-zip" type="file" accept=".zip,application/zip"></div>
+    <button class="primary" id="upload-model">Загрузить ZIP</button>
+  </div>
+  <label class="field-label ai-label" for="inference-model">АКТИВНАЯ МОДЕЛЬ</label>
+  <select id="inference-model" class="ai-select"><option value="">Сначала подключи сервер</option></select>
+  <div class="chat-panel">
+    <div class="chat-title"><span class="app-icon purple">✳</span><div><strong>Чат с NEXUS</strong><small>Запросы отправляются на твой сервер</small></div></div>
+    <div id="inference-messages" class="chat-messages" aria-live="polite"><p class="chat-empty">Подключи сервер и загрузи ZIP модели, чтобы начать общение.</p></div>
+    <label class="field-label" for="inference-prompt">СООБЩЕНИЕ</label>
+    <textarea id="inference-prompt" rows="3" maxlength="4000" placeholder="Напиши сообщение модели..."></textarea>
+    <div class="chat-send"><small class="hint">До 256 новых токенов за ответ.</small><button class="primary" id="send-inference">Отправить ↗</button></div>
+  </div>
+  <p class="hint">Без VPS или другого постоянно работающего сервера сайт не сможет запускать модель. Не публикуй API-токен и не загружай чужие ZIP-файлы, которым не доверяешь.</p>
+</div></div><div class="view" id="view-terminal"><div class="view-head"><div><div class="eyebrow">BUILD OUTPUT</div><h2>Консоль</h2><p>Здесь доступны ссылки на реальные логи GitHub Actions.</p></div></div><div class="terminal"><div class="terminal-head"><i></i><i></i><i></i><span>nexus@cloud:~</span></div><div class="terminal-body"><p><em>01</em> NEXUS OS environment ready</p><p><em>02</em> Repository: <b>tatarhost/Nexos</b></p><p><em>03</em> Runner: provisioned on workflow start</p><p><em>04</em> Waiting for workflow run…</p><p class="cursor">_</p></div></div><a class="primary" href="https://github.com/tatarhost/Nexos/actions" target="_blank" rel="noreferrer">Открыть реальные логи Actions ↗</a></div>
 </section></div><footer><span>© 2026 NEXUS OS</span><span>BUILT FOR CREATORS</span><a href="https://github.com/tatarhost/Nexos" target="_blank">SOURCE ON GITHUB ↗</a></footer></main><script src="app.js"></script></body></html>
